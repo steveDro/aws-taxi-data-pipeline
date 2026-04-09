@@ -1,0 +1,4 @@
+logs
+docker-compose-old.yaml
+venv/
+.env
