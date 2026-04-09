@@ -3,6 +3,8 @@ import boto3
 import pandas as pd
 import os
 from dotenv import load_dotenv
+from datetime import datetime
+import logging
 
 load_dotenv()
 
@@ -14,29 +16,34 @@ AWS_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 REGION = os.getenv("AWS_DEFAULT_REGION")
 BUCKET_NAME = os.getenv("BUCKET_NAME")
 
+logging.basicConfig(level=logging.INFO)
+
 def fetch_data():
+    logging.info("Fetching data...")
     data = pd.read_parquet(URL)
-    print("Data fetched successfully")
+    logging.info(f"Fetched {len(data)} rows.")
     return data
 
 
 def upload_to_s3(data):
-    csv_buffer = StringIO()
-    data.to_csv(csv_buffer, index=False)
+    now = datetime.now()
+    year = now.strftime("%Y")
+    month = now.strftime("%m")
 
-    s3 = boto3.client(
-        "s3",
-        aws_access_key_id=AWS_ACCESS_KEY,
-        aws_secret_access_key=AWS_SECRET_KEY,
-    )
+    file_key = f"raw/taxi-data/year={year}/month={month}/data.parquet"
+
+    buffer = StringIO()
+    data.to_parquet(buffer, index=False)
+
+    s3 = boto3.client("s3")
 
     s3.put_object(
         Bucket=BUCKET_NAME,
-        Key=FILE_KEY,
-        Body=csv_buffer.getvalue()
+        Key=file_key,
+        Body=buffer.getvalue()
     )
 
-    print("Upload to S3 successful!")
+    print(f"Upload to {file_key}")
 
 
 if __name__ == "__main__":
