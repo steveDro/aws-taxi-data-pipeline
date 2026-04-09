@@ -1,13 +1,18 @@
 from io import StringIO
 import boto3
 import pandas as pd
+import os
+from dotenv import load_dotenv
 
+load_dotenv()
 
-BUCKET_NAME = "stv-taxi-data-pipeline"
-FILE_KEY = "raw/taxi-data/yellow_tripdata_2021-01.csv"
+FILE_KEY = os.getenv("FILE_KEY")
 
-URL = "https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2021-01.parquet"
-
+URL = os.getenv("URL")
+AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+REGION = os.getenv("AWS_DEFAULT_REGION")
+BUCKET_NAME = os.getenv("BUCKET_NAME")
 
 def fetch_data():
     data = pd.read_parquet(URL)
@@ -21,8 +26,8 @@ def upload_to_s3(data):
 
     s3 = boto3.client(
         "s3",
-        aws_access_key_id="AKIARIOKTUWT72LZPAEO",
-        aws_secret_access_key="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",
+        aws_access_key_id=AWS_ACCESS_KEY,
+        aws_secret_access_key=AWS_SECRET_KEY,
     )
 
     s3.put_object(
