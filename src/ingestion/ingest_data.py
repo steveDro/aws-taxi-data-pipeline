@@ -1,4 +1,5 @@
-from io import StringIO
+# from io import StringIO
+from io import BytesIO 
 import boto3
 import pandas as pd
 import os
@@ -24,7 +25,6 @@ def fetch_data():
     logging.info(f"Fetched {len(data)} rows.")
     return data
 
-
 def upload_to_s3(data):
     now = datetime.now()
     year = now.strftime("%Y")
@@ -32,10 +32,10 @@ def upload_to_s3(data):
 
     file_key = f"raw/taxi-data/year={year}/month={month}/data.parquet"
 
-    buffer = StringIO()
+    buffer = BytesIO()
     data.to_parquet(buffer, index=False)
 
-    s3 = boto3.client("s3")
+    s3 = boto3.client("s3", region_name=REGION, aws_access_key_id=AWS_ACCESS_KEY, aws_secret_access_key=AWS_SECRET_KEY)
 
     s3.put_object(
         Bucket=BUCKET_NAME,
