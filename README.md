@@ -1,27 +1,21 @@
-# AWS Taxi Data Pipeline
+Project: AWS Taxi Data Pipeline
 
-## Overview
-
-This project builds an end-to-end data engineering pipeline using AWS services.
-
-## Architecture
-
-- Data ingestion from external API / dataset
-- Storage in Amazon S3 (raw layer)
-- Orchestration with Apache Airflow
-- Transformation using Python and SQL
-- Loading into Amazon Redshift
-- Analytics-ready data warehouse
-
-## Tech Stack
+Tech Stack:
 
 - Python
-- AWS (S3, Redshift)
 - Apache Airflow
-- SQL
+- AWS S3
+- PostgreSQL
+- Docker
 
-## Goals
+Pipeline:
 
-- Demonstrate real-world data engineering pipeline
-- Implement scalable ETL workflows
-- Apply data modeling techniques
+1. Fetch taxi data
+2. Store in S3
+3. Orchestrate with Airflow
+4. Load into Postgres
+5. Validate data
+
+Result:
+
+- Processed ~2.7M rows
