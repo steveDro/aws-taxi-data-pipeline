@@ -1,8 +1,6 @@
 from airflow import DAG
-# from airflow.operators.python import PythonOperator
 from airflow.providers.standard.operators.python import PythonOperator
 from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
-from airflow.hooks.postgres_hook import PostgresHook
 from datetime import datetime, timedelta
 from psycopg2.extras import execute_values
 import sys
@@ -19,9 +17,6 @@ default_args = {
     "retries": 2,
     "retry_delay": timedelta(minutes=5),
 }
-
-# hook = PostgresHook(postgres_conn_id="postgres_default")
-# conn = hook.get_conn()
 
 conn = psycopg2.connect(
     host="postgres",
@@ -46,10 +41,6 @@ def load_to_postgres():
     s3.download_fileobj("stv-taxi-data-pipeline", file_key, buffer)
     buffer.seek(0)
 
-    # conn = psycopg2.connect(
-    #     host="postgres", database="airflow",
-    #     user="airflow", password="airflow"
-    # )
     cursor = conn.cursor()
 
     df = pd.read_parquet(buffer, columns=[
@@ -77,7 +68,7 @@ def load_to_postgres():
             float(row.trip_distance)
         )
         for row in df.itertuples(index=False)
-]
+    ]
 
     execute_values(
         cursor,
@@ -89,6 +80,9 @@ def load_to_postgres():
     conn.commit()
     cursor.close()
     conn.close()
+
+#  def load_to_redshift():
+
 
 def check_data():
     cursor = conn.cursor()
@@ -128,8 +122,7 @@ with DAG(
         task_id="create_trips_table",
         conn_id="postgres_default",
         sql="""
-            DROP TABLE IF EXISTS trips;
-            CREATE TABLE trips (
+            CREATE TABLE IF NOT EXISTS trips(
                 id SERIAL PRIMARY KEY,
                 vendor_id BIGINT,
                 passenger_count BIGINT,
@@ -138,6 +131,17 @@ with DAG(
                 trip_distance FLOAT
             )
             """
+    )
+
+    load_to_redshift = SQLExecuteQueryOperator(
+        task_id="load_to_redshift",
+        conn_id="redshift_default",
+        sql="""
+            COPY trips
+            FROM 's3://stv-taxi-data-pipeline/raw/taxi-data/year=2026/month=04/data.parquet'
+            IAM_ROLE 'arn:aws:iam::086861129127:role/service-role/AmazonRedshift-CommandsAccessRole-20260412T004835'
+            CSV;
+        """
     )
 
     data_quality_check = PythonOperator(
