@@ -5,3 +5,4 @@ __pycache__/
 airflow.db
 logs/
 docker-compose-old.yaml
+terraform/.terraform/
