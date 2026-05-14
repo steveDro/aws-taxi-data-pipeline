@@ -1,14 +1,19 @@
+import os
+
 from airflow import DAG
 from airflow.providers.standard.operators.python import PythonOperator
 from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 from datetime import datetime, timedelta
 from psycopg2.extras import execute_values
+import redshift_connector
 import sys
 import pandas as pd
 import psycopg2
 from io import BytesIO 
 import boto3
+from dotenv import load_dotenv
 
+load_dotenv()
 sys.path.append('/opt/airflow')
 
 from src.ingestion.ingest_data import fetch_data, upload_to_s3
@@ -25,9 +30,27 @@ conn = psycopg2.connect(
     password="airflow"
 )
 
+conn2 = redshift_connector.connect(
+    host='taxi-pipeline-cluster.co4rjbiteqtt.us-east-1.redshift.amazonaws.com',
+    port=5439,
+    database='taxi_db',
+    user='admin',
+    password=os.getenv("AWS_REDSHIFT_PASSWORD")
+)
+
 def etl_pipeline():
     df = fetch_data()
     upload_to_s3(df)
+
+def create_database_redshift():
+    conn.autocommit = True
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT 1")
+    print('Database created')
+
+    conn2.commit()
+    cursor.close()
 
 def load_to_postgres():
 
@@ -81,8 +104,6 @@ def load_to_postgres():
     cursor.close()
     conn.close()
 
-#  def load_to_redshift():
-
 
 def check_data():
     cursor = conn.cursor()
@@ -118,6 +139,11 @@ with DAG(
         python_callable=load_to_postgres
     )
 
+    create_db_redshift = PythonOperator(
+        task_id="create_db_redshift",   
+        python_callable=create_database_redshift
+    )
+
     create_table = SQLExecuteQueryOperator(
         task_id="create_trips_table",
         conn_id="postgres_default",
@@ -133,14 +159,45 @@ with DAG(
             """
     )
 
-    load_to_redshift = SQLExecuteQueryOperator(
-        task_id="load_to_redshift",
+    create_table_redshift = SQLExecuteQueryOperator(
+    task_id="create_table_redshift",
+    conn_id="redshift_default",
+    sql=[
+            "DROP TABLE IF EXISTS trips;",
+            """
+            CREATE TABLE trips (
+                VendorID              BIGINT,
+                tpep_pickup_datetime  TIMESTAMP,
+                tpep_dropoff_datetime TIMESTAMP,
+                passenger_count       FLOAT,
+                trip_distance         FLOAT,
+                RatecodeID            FLOAT,
+                store_and_fwd_flag    VARCHAR(10),
+                PULocationID          BIGINT,
+                DOLocationID          BIGINT,
+                payment_type          BIGINT,
+                fare_amount           FLOAT,
+                extra                 FLOAT,
+                mta_tax               FLOAT,
+                tip_amount            FLOAT,
+                tolls_amount          FLOAT,
+                improvement_surcharge FLOAT,
+                total_amount          FLOAT,
+                congestion_surcharge  FLOAT,
+                airport_fee           FLOAT
+            );
+        """
+        ]
+    )
+
+    copy_data_redshift = SQLExecuteQueryOperator(
+        task_id="copy_data_redshift",
         conn_id="redshift_default",
         sql="""
             COPY trips
-            FROM 's3://stv-taxi-data-pipeline/raw/taxi-data/year=2026/month=04/data.parquet'
-            IAM_ROLE 'arn:aws:iam::086861129127:role/service-role/AmazonRedshift-CommandsAccessRole-20260412T004835'
-            CSV;
+            FROM 's3://stv-taxi-data-pipeline/raw/taxi-data/year=2026/month=05/data.parquet'
+            IAM_ROLE 'arn:aws:iam::086861129127:role/redshift-s3-access-role'
+            FORMAT AS PARQUET;
         """
     )
 
@@ -149,5 +206,4 @@ with DAG(
         python_callable=check_data
     )
 
-run_etl >> create_table >> load_task >> data_quality_check
-    
+_ = run_etl >> create_db_redshift >> create_table_redshift >> copy_data_redshift >> data_quality_check
